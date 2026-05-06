@@ -66,3 +66,4 @@ cp .env.example .env   # заполни ключи
 docker-compose up -d
 docker-compose logs -f  # смотреть логи
 ```
+# Mira Bot — последнее обновление: 2026-05-06 23:07
