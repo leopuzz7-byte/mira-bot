@@ -1,0 +1,10 @@
+services:
+  mira-bot:
+    build: .
+    container_name: mira_bot
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+    environment:
+      - DATABASE_PATH=/app/data/mira.db
