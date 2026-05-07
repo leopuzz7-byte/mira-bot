@@ -110,6 +110,19 @@ async def send_reminders(bot: Bot):
 
 def setup_scheduler(bot: Bot) -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler(timezone="UTC")
-    # Проверяем каждый час — отправляем тем, у кого прошло 2 дня
-    scheduler.add_job(send_reminders, "interval", hours=1, args=[bot])
+    scheduler.add_job(send_reminders,     "interval", hours=1,        args=[bot])
+    scheduler.add_job(send_weekly_stats,  "cron",     day_of_week="mon", hour=7, args=[bot])
     return scheduler
+
+
+async def send_weekly_stats(bot: Bot):
+    """Авторассылка статистики каждый понедельник в 10:00."""
+    from database import get_all_onboarded_users, get_weekly_stats, format_stats_text
+    users = await get_all_onboarded_users()
+    for user in users:
+        try:
+            stats = await get_weekly_stats(user["user_id"])
+            text  = format_stats_text(stats)
+            await bot.send_message(chat_id=user["user_id"], text=text)
+        except Exception as e:
+            logger.warning("Не удалось отправить статистику %s: %s", user["user_id"], e)

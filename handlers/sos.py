@@ -16,12 +16,20 @@ EMOTION_LABELS = {
 
 async def start_sos(target, state: FSMContext):
     await state.set_state(SOS.choose_emotion)
-    send = target.answer if isinstance(target, Message) else target.message.answer
+
+    if isinstance(target, Message):
+        send_photo = target.answer_photo
+        send_text  = target.answer
+    else:
+        send_photo = target.message.answer_photo
+        send_text  = target.message.answer
+
     try:
-        await send(photo=FSInputFile("assets/mira_character.png"))
+        await send_photo(FSInputFile("assets/mira_character.png"))
     except Exception:
         pass
-    await send(
+
+    await send_text(
         "Я здесь. Дыши 🌬️\n\n"
         "То, что случилось, уже случилось.\n"
         "Это не делает тебя плохим человеком.\n"

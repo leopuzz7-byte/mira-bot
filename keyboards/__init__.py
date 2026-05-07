@@ -7,11 +7,16 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 def main_menu_kb() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
-        keyboard=[[
-            KeyboardButton(text="📝 Мой дневник"),
-            KeyboardButton(text="🆘 Мне сейчас плохо"),
-            KeyboardButton(text="💬 Просто поговорим"),
-        ]],
+        keyboard=[
+            [
+                KeyboardButton(text="📝 Мой дневник"),
+                KeyboardButton(text="🆘 Мне сейчас плохо"),
+            ],
+            [
+                KeyboardButton(text="💬 Просто поговорим"),
+                KeyboardButton(text="📊 Моя статистика"),
+            ],
+        ],
         resize_keyboard=True,
         persistent=True,
     )

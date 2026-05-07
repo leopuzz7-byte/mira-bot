@@ -131,3 +131,89 @@ async def update_reminder_sent(user_id: int, next_index: int):
             WHERE user_id=?
         """, (next_index, user_id))
         await db.commit()
+
+
+# ─── Статистика ───────────────────────────────────────────────────────────────
+
+MONTHS_RU = {
+    1: "января", 2: "февраля", 3: "марта", 4: "апреля",
+    5: "мая", 6: "июня", 7: "июля", 8: "августа",
+    9: "сентября", 10: "октября", 11: "ноября", 12: "декабря"
+}
+
+
+async def get_weekly_stats(user_id: int) -> dict:
+    from collections import Counter
+    from datetime import datetime, timedelta
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("""
+            SELECT before_emotion, after_emotion, created_at
+            FROM diary
+            WHERE user_id = ? AND created_at >= datetime('now', '-7 days')
+            ORDER BY created_at DESC
+        """, (user_id,)) as cur:
+            rows = await cur.fetchall()
+            entries = [dict(r) for r in rows]
+
+    if not entries:
+        return {"empty": True}
+
+    bad_before = [
+        e["before_emotion"] for e in entries
+        if e["before_emotion"] and e["before_emotion"] != "Всё было хорошо"
+    ]
+    bad_after = [
+        e["after_emotion"] for e in entries
+        if e["after_emotion"] and "Хорошо поела" not in e["after_emotion"]
+    ]
+
+    top_before = Counter(bad_before).most_common(1)
+    top_after  = Counter(bad_after).most_common(1)
+
+    unique_days = len(set(e["created_at"][:10] for e in entries))
+
+    today      = datetime.now()
+    week_start = today - timedelta(days=6)
+
+    def fmt_date(d: datetime) -> str:
+        return f"{d.day} {MONTHS_RU[d.month]}"
+
+    return {
+        "empty":       False,
+        "total":       len(entries),
+        "days":        unique_days,
+        "top_before":  top_before[0] if top_before else None,
+        "top_after":   top_after[0]  if top_after  else None,
+        "period":      f"{fmt_date(week_start)} — {fmt_date(today)}",
+    }
+
+
+def format_stats_text(stats: dict) -> str:
+    if stats.get("empty"):
+        return (
+            "🌿 Твоя неделя с Мирой\n\n"
+            "Пока нет записей за эту неделю.\n"
+            "Начни вести дневник, и я покажу твои паттерны 🩵"
+        )
+
+    lines = [
+        "🌿 Твоя неделя с Мирой",
+        stats["period"] + "\n",
+        f"Записей в дневнике: {stats['total']}",
+        f"Дней с Мирой: {stats['days']} из 7",
+    ]
+
+    if stats["top_before"]:
+        emotion, count = stats["top_before"]
+        times = "раз" if count == 1 else "раза" if count < 5 else "раз"
+        lines.append(f"Чаще всего до еды: {emotion.lower()} ({count} {times})")
+
+    if stats["top_after"]:
+        emotion, count = stats["top_after"]
+        times = "раз" if count == 1 else "раза" if count < 5 else "раз"
+        lines.append(f"Чаще всего после еды: {emotion.lower()} ({count} {times})")
+
+    lines.append("\nТы замечаешь себя. Это уже работа 🩵")
+    return "\n".join(lines)
