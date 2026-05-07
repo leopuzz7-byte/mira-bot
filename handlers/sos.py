@@ -1,29 +1,26 @@
-"""
-SOS — режим помощи при срыве.
-"""
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 
-from states import SOS, Chat
-from keyboards import sos_emotion_kb, sos_physical_kb, main_menu_kb
-from handlers.chat import start_chat
+from states import SOS
+from keyboards import sos_emotion_kb, sos_grounding_kb, sos_physical_kb, main_menu_kb
 
 router = Router()
 
 EMOTION_LABELS = {
-    "sos_shame":    "Стыд и вина",
-    "sos_anger":    "Злость на себя",
-    "sos_numb":     "Просто плохо — не могу объяснить",
+    "sos_shame": "стыд и вина",
+    "sos_anger": "злость на себя",
+    "sos_numb":  "просто плохо — сложно объяснить",
 }
 
 
 async def start_sos(target, state: FSMContext):
-    """Запускает SOS-режим. target — Message или CallbackQuery."""
     await state.set_state(SOS.choose_emotion)
     text = (
-        "Я здесь. Дыши.\n\n"
-        "То, что случилось — уже случилось, и это не делает тебя плохим человеком.\n\n"
+        "Я здесь. Дыши 🌬️\n\n"
+        "То, что случилось — уже случилось.\n"
+        "Это не делает тебя плохим человеком.\n"
+        "Прямо сейчас ты в безопасности.\n\n"
         "Что сейчас чувствуешь больше всего?"
     )
     if isinstance(target, Message):
@@ -38,14 +35,36 @@ async def start_sos(target, state: FSMContext):
 )
 async def sos_emotion(cb: CallbackQuery, state: FSMContext):
     label = EMOTION_LABELS[cb.data]
-    await cb.message.edit_reply_markup()
     await state.update_data(sos_emotion=label)
-
-    opening = (
-        f"Понимаю тебя. {label.lower().capitalize()} в такие моменты — это очень тяжело.\n\n"
-        "Можешь рассказать, что происходило сегодня до этого? "
-        "Иногда переедание — просто ответ на что-то, что накопилось."
+    await cb.message.edit_reply_markup()
+    await state.set_state(SOS.grounding)
+    await cb.message.answer(
+        f"Понимаю тебя. {label.capitalize()} в такие моменты — это очень тяжело.\n\n"
+        "Прежде чем говорить — давай на 30 секунд просто побудем здесь. 🌬️\n\n"
+        "Найди 3 вещи, которые видишь прямо сейчас.\n"
+        "Назови их про себя. Медленно.\n\n"
+        "...\n\n"
+        "Как ты сейчас?",
+        reply_markup=sos_grounding_kb(),
     )
+
+
+@router.callback_query(
+    F.data.in_({"sos_ground_better", "sos_ground_still"}),
+    SOS.grounding,
+)
+async def sos_after_grounding(cb: CallbackQuery, state: FSMContext):
+    await cb.message.edit_reply_markup()
+    data = await state.get_data()
+    opening = (
+        "Хорошо, что немного полегче. Я здесь.\n\n"
+        "Можешь рассказать, что происходило сегодня до этого?"
+        if cb.data == "sos_ground_better"
+        else
+        "Ничего. Я рядом, никуда не тороплюсь.\n\n"
+        "Хочешь рассказать, что случилось сегодня?"
+    )
+    from handlers.chat import start_chat
     await start_chat(cb, state, mode="sos", opening_text=opening)
 
 
@@ -58,17 +77,15 @@ async def sos_physical(cb: CallbackQuery, state: FSMContext):
     )
 
 
-@router.callback_query(F.data == "sos_phys_minor", SOS.choose_emotion)
+@router.callback_query(F.data == "sos_phys_minor")
 async def sos_phys_minor(cb: CallbackQuery, state: FSMContext):
     await cb.message.edit_reply_markup()
-    opening = (
-        "Понятно, это неприятно, но пройдёт.\n\n"
-        "Хочешь поговорить о том, как ты себя сейчас чувствуешь?"
-    )
-    await start_chat(cb, state, mode="sos", opening_text=opening)
+    from handlers.chat import start_chat
+    await start_chat(cb, state, mode="sos",
+                     opening_text="Понятно, это неприятно, но пройдёт.\nХочешь поговорить о том, как ты сейчас?")
 
 
-@router.callback_query(F.data == "sos_phys_serious", SOS.choose_emotion)
+@router.callback_query(F.data == "sos_phys_serious")
 async def sos_phys_serious(cb: CallbackQuery, state: FSMContext):
     await state.clear()
     await cb.message.edit_reply_markup()

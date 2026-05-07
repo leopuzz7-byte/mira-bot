@@ -1,6 +1,3 @@
-"""
-Дневник состояния — записи до/после еды.
-"""
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
@@ -10,108 +7,148 @@ from keyboards import (
     diary_before_kb, diary_after_kb,
     diary_context_kb, diary_after_save_kb, main_menu_kb,
 )
-from database import save_diary_entry
+from database import save_diary_entry, get_diary_count
 
 router = Router()
 
 BEFORE_LABELS = {
     "d_before_sad":     "Было грустно",
-    "d_before_angry":   "Злилась или раздражалась",
-    "d_before_anxious": "Переживала, тревожилась",
+    "d_before_anxious": "Переживала, боялась",
+    "d_before_angry":   "Злилась или обижалась",
     "d_before_guilt":   "Винила себя за что-то",
-    "d_before_ok":      "Всё хорошо — просто поела",
+    "d_before_ok":      "Всё было хорошо",
 }
 AFTER_LABELS = {
-    "d_after_bad": "Недовольна собой, злюсь",
-    "d_after_ok":  "Хорошо поела — сыта и довольна",
+    "d_after_guilt": "Винила себя",
+    "d_after_angry": "Злилась на себя",
+    "d_after_ok":    "Хорошо поела — сыта и довольна",
 }
 
 
-# ─── Запуск дневника из главного меню ────────────────────────────────────────
-
 async def start_diary(target, state: FSMContext):
-    """Запускает дневник. target — Message или CallbackQuery."""
     await state.set_state(Diary.before_emotion)
-    text = "Расскажи, как был последний приём пищи.\nКак ты себя чувствовала до?"
+    text = "Вспомни последний раз, когда ела.\nКак ты себя чувствовала до?"
+    kb = diary_before_kb()
     if isinstance(target, Message):
-        await target.answer(text, reply_markup=diary_before_kb())
+        await target.answer(text, reply_markup=kb)
     else:
-        await target.message.answer(text, reply_markup=diary_before_kb())
+        await target.message.answer(text, reply_markup=kb)
 
 
-# ─── Шаг 1 — эмоция ДО ───────────────────────────────────────────────────────
+# ─── ДО: кнопки ──────────────────────────────────────────────────────────────
 
-@router.callback_query(
-    F.data.in_(set(BEFORE_LABELS.keys())),
-    Diary.before_emotion,
-)
+@router.callback_query(F.data.in_(set(BEFORE_LABELS)), Diary.before_emotion)
 async def diary_before(cb: CallbackQuery, state: FSMContext):
-    label = BEFORE_LABELS[cb.data]
-    await state.update_data(before_emotion=label)
+    await state.update_data(before_emotion=BEFORE_LABELS[cb.data])
     await cb.message.edit_reply_markup()
     await state.set_state(Diary.after_emotion)
-    await cb.message.answer("А после еды?", reply_markup=diary_after_kb())
+    await cb.message.answer("Хорошо. А после еды — что осталось?", reply_markup=diary_after_kb())
 
 
-# ─── Шаг 2 — эмоция ПОСЛЕ ────────────────────────────────────────────────────
+# ─── ДО: свой вариант ────────────────────────────────────────────────────────
 
-@router.callback_query(
-    F.data.in_(set(AFTER_LABELS.keys())),
-    Diary.after_emotion,
-)
-async def diary_after(cb: CallbackQuery, state: FSMContext):
-    label = AFTER_LABELS[cb.data]
-    await state.update_data(after_emotion=label)
+@router.callback_query(F.data == "d_before_custom", Diary.before_emotion)
+async def diary_before_custom_start(cb: CallbackQuery, state: FSMContext):
     await cb.message.edit_reply_markup()
-    await state.set_state(Diary.context)
-    await cb.message.answer(
-        "И последний вопрос — что сейчас происходит в жизни в целом?\n"
-        "Есть что-то, что давит или беспокоит?",
-        reply_markup=diary_context_kb(),
+    await state.set_state(Diary.before_custom)
+    await cb.message.answer("Напиши как хочешь — своими словами 🌿")
+
+
+@router.message(Diary.before_custom)
+async def diary_before_custom_text(msg: Message, state: FSMContext):
+    await state.update_data(before_emotion=msg.text or "")
+    await state.set_state(Diary.after_emotion)
+    await msg.answer("Хорошо. А после еды — что осталось?", reply_markup=diary_after_kb())
+
+
+# ─── ПОСЛЕ: кнопки ───────────────────────────────────────────────────────────
+
+@router.callback_query(F.data.in_(set(AFTER_LABELS)), Diary.after_emotion)
+async def diary_after(cb: CallbackQuery, state: FSMContext):
+    await state.update_data(after_emotion=AFTER_LABELS[cb.data])
+    await cb.message.edit_reply_markup()
+    await _after_saved(cb, state)
+
+
+# ─── ПОСЛЕ: свой вариант ─────────────────────────────────────────────────────
+
+@router.callback_query(F.data == "d_after_custom", Diary.after_emotion)
+async def diary_after_custom_start(cb: CallbackQuery, state: FSMContext):
+    await cb.message.edit_reply_markup()
+    await state.set_state(Diary.after_custom)
+    await cb.message.answer("Напиши как хочешь 💛")
+
+
+@router.message(Diary.after_custom)
+async def diary_after_custom_text(msg: Message, state: FSMContext):
+    await state.update_data(after_emotion=msg.text or "")
+    await _after_saved(msg, state)
+
+
+# ─── Третий вопрос и сохранение ──────────────────────────────────────────────
+
+async def _after_saved(target, state: FSMContext):
+    user_id = (
+        target.from_user.id
+        if isinstance(target, CallbackQuery)
+        else target.from_user.id
     )
+    count = await get_diary_count(user_id)
 
+    if count >= 1:
+        # Со второго визита показываем третий вопрос
+        await state.set_state(Diary.context)
+        text = "И последнее — что сейчас происходит в жизни в целом? Есть что-то, что давит?"
+        kb = diary_context_kb()
+        if isinstance(target, Message):
+            await target.answer(text, reply_markup=kb)
+        else:
+            await target.message.answer(text, reply_markup=kb)
+    else:
+        await _save_and_respond(target, state, life_context="")
 
-# ─── Шаг 3 — контекст жизни ──────────────────────────────────────────────────
 
 @router.callback_query(F.data.in_({"d_ctx_yes", "d_ctx_no"}), Diary.context)
-async def diary_context(cb: CallbackQuery, state: FSMContext):
+async def diary_context_cb(cb: CallbackQuery, state: FSMContext):
     ctx = "Да, есть кое-что" if cb.data == "d_ctx_yes" else "Нет, всё спокойно"
     await state.update_data(life_context=ctx)
+    await cb.message.edit_reply_markup()
+    await _save_and_respond(cb, state, life_context=ctx)
+
+
+async def _save_and_respond(target, state: FSMContext, life_context: str):
+    user_id = target.from_user.id
     data = await state.get_data()
 
-    await save_diary_entry(
-        user_id=cb.from_user.id,
-        before_emotion=data["before_emotion"],
-        after_emotion=data["after_emotion"],
-        life_context=ctx,
+    before = data.get("before_emotion", "")
+    after  = data.get("after_emotion", "")
+
+    await save_diary_entry(user_id, before, after, life_context)
+
+    send = (
+        target.message.answer
+        if isinstance(target, CallbackQuery)
+        else target.answer
     )
 
-    await cb.message.edit_reply_markup()
+    all_ok = before == "Всё было хорошо" and after == "Хорошо поела — сыта и довольна"
 
-    # Ветка — если всё было хорошо
-    if data["before_emotion"] == "Всё хорошо — просто поела" \
-            and data["after_emotion"] == "Хорошо поела — сыта и довольна":
+    if all_ok:
         await state.clear()
-        await cb.message.answer(
-            "Как здорово, что этот приём пищи прошёл спокойно! "
-            "Это уже кое-что значит.\n\n"
-            "Если вдруг в следующий раз станет по-другому — напиши мне. "
-            "Я всегда здесь.",
+        await send(
+            "Хороший приём пищи — это тоже важно замечать. Запомним этот момент 🌿",
             reply_markup=main_menu_kb(),
         )
-        return
+    else:
+        await send(
+            "Ты заметила — это уже кое-что важное.\n\n"
+            "Со временем такие кусочки складываются в картину,\n"
+            "и ты сможешь понять, что на самом деле происходит с тобой.\n"
+            "Я здесь, чтобы помочь тебе с этим 💛\n\n"
+            "Хочешь обсудить это со мной?",
+            reply_markup=diary_after_save_kb(),
+        )
 
-    # Ветка — было тяжело
-    await cb.message.answer(
-        "Ты только что сделала кое-что важное — заметила, что происходило внутри.\n\n"
-        "Само осознание триггера снижает риск следующего срыва. "
-        "Просто замечай — пока это всё, что нужно.\n\n"
-        "Запись сохранена. Хочешь поговорить об этом подробнее?",
-        reply_markup=diary_after_save_kb(),
-    )
-
-
-# ─── После сохранения — выбор пользователя ───────────────────────────────────
 
 @router.callback_query(F.data == "d_want_chat")
 async def diary_want_chat(cb: CallbackQuery, state: FSMContext):
@@ -124,7 +161,4 @@ async def diary_want_chat(cb: CallbackQuery, state: FSMContext):
 async def diary_done(cb: CallbackQuery, state: FSMContext):
     await state.clear()
     await cb.message.edit_reply_markup()
-    await cb.message.answer(
-        "Хорошо, я здесь. Пиши, когда захочешь.",
-        reply_markup=main_menu_kb(),
-    )
+    await cb.message.answer("Хорошо, я здесь. Пиши, когда захочешь.", reply_markup=main_menu_kb())

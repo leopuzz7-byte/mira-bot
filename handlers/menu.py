@@ -1,6 +1,3 @@
-"""
-Главное меню и общие команды.
-"""
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
@@ -13,29 +10,21 @@ router = Router()
 
 
 async def send_main_menu(target, returning: bool = False):
-    text = (
-        "Привет! Как я могу помочь тебе сегодня?"
-        if returning
-        else "Я здесь. Пиши, когда нужно."
-    )
+    text = "Привет! Как я могу помочь тебе сегодня?" if returning else "Я здесь. Пиши, когда нужно."
     if isinstance(target, Message):
         await target.answer(text, reply_markup=main_menu_kb())
     else:
         await target.message.answer(text, reply_markup=main_menu_kb())
 
 
-# ─── Кнопка "Внести запись" ───────────────────────────────────────────────────
-
-@router.message(F.text == "📝 Внести запись")
+@router.message(F.text == "📝 Мой дневник")
 async def menu_diary(msg: Message, state: FSMContext):
     await state.clear()
     from handlers.diary import start_diary
     await start_diary(msg, state)
 
 
-# ─── Кнопка "Помоги мне!" ────────────────────────────────────────────────────
-
-@router.message(F.text == "🆘 Помоги мне!")
+@router.message(F.text == "🆘 Мне сейчас плохо")
 async def menu_help(msg: Message, state: FSMContext):
     await state.clear()
     await state.set_state(Menu.help_choice)
@@ -58,9 +47,7 @@ async def help_chat(cb: CallbackQuery, state: FSMContext):
     await start_chat(cb, state, mode="chat")
 
 
-# ─── Кнопка "Поболтаем" ───────────────────────────────────────────────────────
-
-@router.message(F.text == "💬 Поболтаем")
+@router.message(F.text == "💬 Просто поговорим")
 async def menu_casual(msg: Message, state: FSMContext):
     await state.clear()
     from handlers.chat import start_chat
@@ -97,6 +84,45 @@ async def cmd_help(msg: Message):
         "📝 /diary — записать, как прошёл приём пищи\n"
         "🆘 /sos — помощь прямо сейчас, если тяжело\n"
         "💬 /chat — просто поговорить со мной\n"
-        "🔄 /start — вернуться в начало\n\n"
-        "Или используй кнопки внизу — они всегда там."
+        "🔄 /start — вернуться в начало"
     )
+
+
+@router.callback_query(F.data == "go_menu")
+async def go_menu(cb: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await cb.message.edit_reply_markup()
+    await cb.message.answer("Я здесь, пиши когда нужно.", reply_markup=main_menu_kb())
+
+
+# ─── Обработчики кнопок напоминаний ─────────────────────────────────────────
+
+@router.callback_query(F.data == "remind_ok")
+async def remind_ok(cb: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await cb.message.edit_reply_markup()
+    await cb.message.answer("Хорошо 🌿 Я здесь, если что.", reply_markup=main_menu_kb())
+
+
+@router.callback_query(F.data == "remind_diary")
+async def remind_diary(cb: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await cb.message.edit_reply_markup()
+    from handlers.diary import start_diary
+    await start_diary(cb, state)
+
+
+@router.callback_query(F.data == "remind_sos")
+async def remind_sos(cb: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await cb.message.edit_reply_markup()
+    from handlers.sos import start_sos
+    await start_sos(cb, state)
+
+
+@router.callback_query(F.data == "remind_chat")
+async def remind_chat(cb: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await cb.message.edit_reply_markup()
+    from handlers.chat import start_chat
+    await start_chat(cb, state, mode="chat")
