@@ -42,7 +42,7 @@ async def diary_before(cb: CallbackQuery, state: FSMContext):
     await state.update_data(before_emotion=BEFORE_LABELS[cb.data])
     await cb.message.edit_reply_markup()
     await state.set_state(Diary.after_emotion)
-    await cb.message.answer("Хорошо. А после еды — что осталось?", reply_markup=diary_after_kb())
+    await cb.message.answer("Хорошо. А после еды, что осталось?", reply_markup=diary_after_kb())
 
 
 # ─── ДО: свой вариант ────────────────────────────────────────────────────────
@@ -51,14 +51,14 @@ async def diary_before(cb: CallbackQuery, state: FSMContext):
 async def diary_before_custom_start(cb: CallbackQuery, state: FSMContext):
     await cb.message.edit_reply_markup()
     await state.set_state(Diary.before_custom)
-    await cb.message.answer("Напиши как хочешь — своими словами 🌿")
+    await cb.message.answer("Напиши как хочешь, своими словами 🌿")
 
 
 @router.message(Diary.before_custom)
 async def diary_before_custom_text(msg: Message, state: FSMContext):
     await state.update_data(before_emotion=msg.text or "")
     await state.set_state(Diary.after_emotion)
-    await msg.answer("Хорошо. А после еды — что осталось?", reply_markup=diary_after_kb())
+    await msg.answer("Хорошо. А после еды, что осталось?", reply_markup=diary_after_kb())
 
 
 # ─── ПОСЛЕ: кнопки ───────────────────────────────────────────────────────────
@@ -76,7 +76,7 @@ async def diary_after(cb: CallbackQuery, state: FSMContext):
 async def diary_after_custom_start(cb: CallbackQuery, state: FSMContext):
     await cb.message.edit_reply_markup()
     await state.set_state(Diary.after_custom)
-    await cb.message.answer("Напиши как хочешь 💛")
+    await cb.message.answer("Напиши как хочешь 🩵")
 
 
 @router.message(Diary.after_custom)
@@ -98,7 +98,7 @@ async def _after_saved(target, state: FSMContext):
     if count >= 1:
         # Со второго визита показываем третий вопрос
         await state.set_state(Diary.context)
-        text = "И последнее — что сейчас происходит в жизни в целом? Есть что-то, что давит?"
+        text = "И последнее, что сейчас происходит в жизни в целом? Есть что-то, что давит?"
         kb = diary_context_kb()
         if isinstance(target, Message):
             await target.answer(text, reply_markup=kb)
@@ -136,15 +136,15 @@ async def _save_and_respond(target, state: FSMContext, life_context: str):
     if all_ok:
         await state.clear()
         await send(
-            "Хороший приём пищи — это тоже важно замечать. Запомним этот момент 🌿",
+            "Хороший приём пищи, это тоже важно замечать. Запомним этот момент 🌿",
             reply_markup=main_menu_kb(),
         )
     else:
         await send(
-            "Ты заметила — это уже кое-что важное.\n\n"
+            "Ты заметила. Это уже кое-что важное.\n\n"
             "Со временем такие кусочки складываются в картину,\n"
             "и ты сможешь понять, что на самом деле происходит с тобой.\n"
-            "Я здесь, чтобы помочь тебе с этим 💛\n\n"
+            "Я здесь, чтобы помочь тебе с этим 🩵\n\n"
             "Хочешь обсудить это со мной?",
             reply_markup=diary_after_save_kb(),
         )

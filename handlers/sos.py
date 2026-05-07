@@ -1,5 +1,5 @@
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, FSInputFile
 from aiogram.fsm.context import FSMContext
 
 from states import SOS
@@ -10,23 +10,25 @@ router = Router()
 EMOTION_LABELS = {
     "sos_shame": "стыд и вина",
     "sos_anger": "злость на себя",
-    "sos_numb":  "просто плохо — сложно объяснить",
+    "sos_numb":  "просто плохо, сложно объяснить",
 }
 
 
 async def start_sos(target, state: FSMContext):
     await state.set_state(SOS.choose_emotion)
-    text = (
+    send = target.answer if isinstance(target, Message) else target.message.answer
+    try:
+        await send(photo=FSInputFile("assets/mira_character.png"))
+    except Exception:
+        pass
+    await send(
         "Я здесь. Дыши 🌬️\n\n"
-        "То, что случилось — уже случилось.\n"
+        "То, что случилось, уже случилось.\n"
         "Это не делает тебя плохим человеком.\n"
         "Прямо сейчас ты в безопасности.\n\n"
-        "Что сейчас чувствуешь больше всего?"
+        "Что сейчас чувствуешь больше всего?",
+        reply_markup=sos_emotion_kb(),
     )
-    if isinstance(target, Message):
-        await target.answer(text, reply_markup=sos_emotion_kb())
-    else:
-        await target.message.answer(text, reply_markup=sos_emotion_kb())
 
 
 @router.callback_query(
@@ -39,8 +41,8 @@ async def sos_emotion(cb: CallbackQuery, state: FSMContext):
     await cb.message.edit_reply_markup()
     await state.set_state(SOS.grounding)
     await cb.message.answer(
-        f"Понимаю тебя. {label.capitalize()} в такие моменты — это очень тяжело.\n\n"
-        "Прежде чем говорить — давай на 30 секунд просто побудем здесь. 🌬️\n\n"
+        f"Понимаю тебя. {label.capitalize()} в такие моменты. Это очень тяжело.\n\n"
+        "Прежде чем говорить, давай на 30 секунд просто побудем здесь. 🌬️\n\n"
         "Найди 3 вещи, которые видишь прямо сейчас.\n"
         "Назови их про себя. Медленно.\n\n"
         "...\n\n"
@@ -72,7 +74,7 @@ async def sos_after_grounding(cb: CallbackQuery, state: FSMContext):
 async def sos_physical(cb: CallbackQuery, state: FSMContext):
     await cb.message.edit_reply_markup()
     await cb.message.answer(
-        "Это физический дискомфорт от еды — или что-то более серьёзное?",
+        "Это физический дискомфорт от еды или что-то более серьёзное?",
         reply_markup=sos_physical_kb(),
     )
 
@@ -90,8 +92,8 @@ async def sos_phys_serious(cb: CallbackQuery, state: FSMContext):
     await state.clear()
     await cb.message.edit_reply_markup()
     await cb.message.answer(
-        "Если тебе физически плохо — пожалуйста, обратись за медицинской помощью "
+        "Если тебе физически плохо, пожалуйста обратись за медицинской помощью "
         "или позвони близким. Это важнее нашего разговора.\n\n"
-        "Когда всё будет в порядке — я здесь.",
+        "Когда всё будет в порядке, я здесь.",
         reply_markup=main_menu_kb(),
     )

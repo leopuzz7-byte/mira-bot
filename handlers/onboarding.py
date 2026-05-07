@@ -1,5 +1,5 @@
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, FSInputFile
 from aiogram.fsm.context import FSMContext
 from aiogram.filters import CommandStart
 
@@ -17,12 +17,16 @@ REASON_LABELS = {
 }
 
 STEP2_TEXT = (
-    "Всё начинается с одного простого шага —\nпросто замечать.\n\n"
+    "Всё начинается с одного простого шага.\n\n"
+    "Иногда мы едим не потому что голодны, а потому что тревожно, грустно "
+    "или просто накопилась усталость. Это называется триггер: "
+    "внутренний сигнал, который запускает желание поесть. "
+    "Когда начинаешь его замечать, он теряет власть над тобой.\n\n"
     "— Что ты чувствовала до того, как потянулась к еде?\n"
     "— Что было после?\n\n"
     '<a href="https://pubmed.ncbi.nlm.nih.gov/28918456/">Исследования показывают</a>: '
     "само это осознание снижает риск срыва почти вдвое. Без запретов и диет.\n\n"
-    "Давай попробуем прямо сейчас — займёт 2 минуты 🩵"
+    "Давай попробуем прямо сейчас, займёт 2 минуты 🩵"
 )
 
 
@@ -36,14 +40,20 @@ async def cmd_start(msg: Message, state: FSMContext):
         await send_main_menu(msg, returning=True)
         return
 
+    # Анимация + приветствие отправляем сразу
     await state.set_state(Onboarding.about)
+    try:
+        await msg.answer_animation(FSInputFile("assets/mira_hello.mp4"))
+    except Exception:
+        pass  # если файл не найден — просто пропускаем
+
     await msg.answer(
-        "Привет 🌿\nЯ Мира — твоя помощница в питании.\n\n"
+        "Привет 🌿\nЯ Мира, твоя помощница в питании.\n\n"
         "Я не про диеты и не про цифры на весах. Я про то, что происходит "
         "внутри, когда еда становится способом справиться с чем-то тяжёлым.\n\n"
         "Я понимаю, как ты устала от бесконечных попыток похудеть, подсчёта "
         "калорий, чувства вины. Устала ненавидеть своё отражение в зеркале.\n\n"
-        "Со мной можно просто выдохнуть. Здесь безопасно 💛",
+        "Со мной можно просто выдохнуть. Здесь безопасно 🩵",
         reply_markup=onboarding_start_kb(),
     )
 
@@ -52,7 +62,12 @@ async def cmd_start(msg: Message, state: FSMContext):
 async def ob_about(cb: CallbackQuery, state: FSMContext):
     await cb.message.edit_reply_markup()
     await state.set_state(Onboarding.breathing)
-    await cb.message.answer(STEP2_TEXT, parse_mode="HTML", reply_markup=onboarding_reason_kb())
+    await cb.message.answer(
+        STEP2_TEXT,
+        parse_mode="HTML",
+        disable_web_page_preview=True,
+        reply_markup=onboarding_reason_kb(),
+    )
 
 
 @router.callback_query(
@@ -64,9 +79,9 @@ async def ob_reason(cb: CallbackQuery, state: FSMContext):
     await state.update_data(reason=REASON_LABELS.get(cb.data, ""))
     await state.set_state(Onboarding.ready)
     await cb.message.answer(
-        "Хорошо. Прямо сейчас, чем бы ты ни чувствовала — предлагаю на секунду выдохнуть.\n\n"
+        "Хорошо. Прямо сейчас, предлагаю на секунду выдохнуть.\n\n"
         "Со мной ты в безопасности. Я никуда не передаю то, что ты пишешь.\n"
-        "Начиная с этого момента — просто замечай, а я буду рядом 💛",
+        "Начиная с этого момента, просто пиши мне, а я буду рядом 🩵",
         reply_markup=onboarding_try_kb(),
     )
 

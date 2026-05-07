@@ -39,7 +39,7 @@ async def start_chat(
 async def stop_chat(msg: Message, state: FSMContext):
     await state.clear()
     await msg.answer(
-        "Рада, что поговорили. Если что-то навалится — пиши, я здесь.",
+        "Рада, что поговорили. Если что-то навалится, пиши, я здесь.",
         reply_markup=main_menu_kb(),
     )
 
