@@ -56,7 +56,7 @@ async def chat_message(msg: Message, state: FSMContext, ai):
     history.append({"role": "user", "content": msg.text or ""})
 
     # Контекст из дневника (последние 3 записи)
-    entries = await get_last_entries(msg.from_user.id, limit=3)
+    entries = await get_last_entries(msg.from_user.id, limit=10)
     diary_ctx = format_diary_context(entries)
 
     # Показываем "печатает..."
@@ -75,9 +75,9 @@ async def chat_message(msg: Message, state: FSMContext, ai):
     # Сохраняем ответ в историю
     history.append({"role": "assistant", "content": reply})
 
-    # Ограничиваем историю последними 20 сообщениями (10 парами)
-    if len(history) > 20:
-        history = history[-20:]
+    # Ограничиваем историю последними 50 сообщениями
+    if len(history) > 50:
+        history = history[-50:]
 
     await state.update_data(history=history)
     await msg.answer(reply)
